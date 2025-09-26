@@ -3,14 +3,17 @@ import './TicTacToe.css'
 import circle_icon from '../Assets/circle.png'
 import cross_icon from '../Assets/cross.png'
 
-
-let data = ["", "", "", "", "", "", "", "", "",]
-
+let data = ["", "", "", "", "", "", "", "", ""]
 
 export const TicTacToe = () => {
-
     let [count, setCount] = useState(0);
     let [lock, setLock] = useState(false);
+    let [vsAI, setVsAI] = useState(true); // vs AI or 2 players
+    let [difficulty, setDifficulty] = useState("easy"); // "easy" | "medium" | "hard"
+
+    const human = "x"; 
+    const ai = "o";    
+
     let titleRef = useRef(null);
     let box1 = useRef(null);
     let box2 = useRef(null);
@@ -25,78 +28,183 @@ export const TicTacToe = () => {
     let box_array = [box1, box2, box3, box4, box5, box6, box7, box8, box9];
 
     const toggle = (e, num) => {
-        if (lock) {
-            return 0;
+        if (lock) return;
+        if (data[num] !== "") return;
+
+        const symbol = count % 2 === 0 ? "x" : "o";
+        const icon = symbol === "x" ? cross_icon : circle_icon;
+
+        e.target.innerHTML = `<img src='${icon}'>`;
+        data[num] = symbol;
+        setCount(prev => prev + 1);
+
+        checkWin();
+
+        if (vsAI && symbol === human && !lock) {
+            setTimeout(() => {
+                if (!lock) {
+                    if (difficulty === "easy") {
+                        aiMoveEasy();
+                    } else if (difficulty === "medium") {
+                        aiMoveMedium();
+                    } else {
+                        aiMoveHard();
+                    }
+                }
+            }, 350);
         }
-        if (data[num] !== "") {   // ✅ Prevent overwriting a filled box
-            return;
-        }
-        if (count % 2 === 0) {
-            e.target.innerHTML = `<img src='${cross_icon}'>`;
-            data[num] = "x";
-            setCount(count + 1);
-        }
-        else {
-            e.target.innerHTML = `<img src='${circle_icon}'>`;
-            data[num] = "o";
-            setCount(count + 1);
-        }
-        checkWin()
-    }
+    };
 
     const checkWin = () => {
-        if (data[0] === data[1] && data[1] === data[2] && data[2] !== "") {
-            won(data[2]);
+        const wins = [
+            [0,1,2],[3,4,5],[6,7,8],
+            [0,3,6],[1,4,7],[2,5,8],
+            [0,4,8],[2,4,6]
+        ];
+
+        for (let combo of wins) {
+            const [a, b, c] = combo;
+            if (data[a] && data[a] === data[b] && data[a] === data[c]) {
+                won(data[a]);
+                return true;
+            }
         }
-        else if (data[3] === data[4] && data[4] === data[5] && data[5] !== "") {
-            won(data[5]);
-        }
-        else if (data[6] === data[7] && data[7] === data[8] && data[8] !== "") {
-            won(data[8]);
-        }
-        else if (data[0] === data[3] && data[3] === data[6] && data[6] !== "") {
-            won(data[6]);
-        }
-        else if (data[1] === data[4] && data[4] === data[7] && data[7] !== "") {
-            won(data[7]);
-        }
-        else if (data[2] === data[5] && data[5] === data[8] && data[8] !== "") {
-            won(data[8]);
-        }
-        else if (data[0] === data[4] && data[4] === data[8] && data[8] !== "") {
-            won(data[8]);
-        }
-        else if (data[2] === data[4] && data[4] === data[6] && data[6] !== "") {
-            won(data[6]);
-        }
-    }
+        return false;
+    };
 
     const won = (winner) => {
         setLock(true);
-        if (winner === "x") {
-            titleRef.current.innerHTML = `Congratulations: <img src=${cross_icon} />`;
+        titleRef.current.innerHTML = `Congratulations: <img src=${winner === "x" ? cross_icon : circle_icon} />`;
+    };
+
+    // ✅ EASY MODE (Random Move)
+    const aiMoveEasy = () => {
+        if (lock) return;
+        const empty = data.map((v, i) => (v === "" ? i : null)).filter(i => i !== null);
+        if (empty.length === 0) return;
+
+        const choice = empty[Math.floor(Math.random() * empty.length)];
+        placeMove(choice, ai);
+    };
+
+    // ✅ MEDIUM MODE (50% smart, 50% random)
+    const aiMoveMedium = () => {
+        if (lock) return;
+        if (Math.random() < 0.5) {
+            // smart move
+            const bestMove = minimax(data, ai).index;
+            placeMove(bestMove, ai);
+        } else {
+            // random move
+            aiMoveEasy();
         }
-        else {
-            titleRef.current.innerHTML = `Congratulations: <img src=${circle_icon} />`;
+    };
+
+    // ✅ HARD MODE (Minimax - unbeatable)
+    const aiMoveHard = () => {
+        if (lock) return;
+        const bestMove = minimax(data, ai).index;
+        placeMove(bestMove, ai);
+    };
+
+    const placeMove = (index, player) => {
+        const icon = player === "x" ? cross_icon : circle_icon;
+        const boxRef = box_array[index];
+        if (boxRef && boxRef.current) {
+            boxRef.current.innerHTML = `<img src='${icon}'>`;
         }
-    }
+        data[index] = player;
+        setCount(prev => prev + 1);
+        checkWin();
+    };
+
+    // ✅ Minimax Algorithm
+    const minimax = (board, player) => {
+        const empty = board.map((v, i) => (v === "" ? i : null)).filter(i => i !== null);
+
+        if (checkWinner(board, human)) return { score: -10 };
+        if (checkWinner(board, ai)) return { score: 10 };
+        if (empty.length === 0) return { score: 0 };
+
+        let moves = [];
+
+        for (let i of empty) {
+            let move = {};
+            move.index = i;
+            board[i] = player;
+
+            if (player === ai) {
+                let result = minimax(board, human);
+                move.score = result.score;
+            } else {
+                let result = minimax(board, ai);
+                move.score = result.score;
+            }
+
+            board[i] = "";
+            moves.push(move);
+        }
+
+        let bestMove;
+        if (player === ai) {
+            let bestScore = -Infinity;
+            for (let i = 0; i < moves.length; i++) {
+                if (moves[i].score > bestScore) {
+                    bestScore = moves[i].score;
+                    bestMove = i;
+                }
+            }
+        } else {
+            let bestScore = Infinity;
+            for (let i = 0; i < moves.length; i++) {
+                if (moves[i].score < bestScore) {
+                    bestScore = moves[i].score;
+                    bestMove = i;
+                }
+            }
+        }
+        return moves[bestMove];
+    };
+
+    const checkWinner = (board, player) => {
+        const wins = [
+            [0,1,2],[3,4,5],[6,7,8],
+            [0,3,6],[1,4,7],[2,5,8],
+            [0,4,8],[2,4,6]
+        ];
+        return wins.some(combo => combo.every(i => board[i] === player));
+    };
 
     const resetGame = () => {
         data = ["", "", "", "", "", "", "", "", ""];
         setCount(0);
         setLock(false);
         titleRef.current.innerHTML = "Tic Tac Toe Game in <span>React</span>";
-        document.querySelectorAll(".boxes").forEach(box => box.innerHTML = "");
-        box_array.map((e)=>{
-            e.current.innerHTML = "";
+        box_array.forEach(b => {
+            if (b.current) b.current.innerHTML = "";
         })
-    }
+    };
 
     return (
         <div className='container'>
             <h1 className='title' ref={titleRef}>
                 Tic Tac Toe Game in <span>React</span>
             </h1>
+
+            {/* ✅ Mode toggle buttons */}
+            <div className="mode-controls">
+                <button onClick={() => setVsAI(true)} className={vsAI ? 'active' : ''}>Play vs AI</button>
+                <button onClick={() => setVsAI(false)} className={!vsAI ? 'active' : ''}>2 Players</button>
+            </div>
+
+            {/* ✅ Difficulty buttons (only show if AI is enabled) */}
+            {vsAI && (
+                <div className="mode-controls">
+                    <button onClick={() => setDifficulty("easy")} className={difficulty === "easy" ? 'active' : ''}>Easy</button>
+                    <button onClick={() => setDifficulty("medium")} className={difficulty === "medium" ? 'active' : ''}>Medium</button>
+                    <button onClick={() => setDifficulty("hard")} className={difficulty === "hard" ? 'active' : ''}>Hard</button>
+                </div>
+            )}
 
             <div className="board">
                 <div className="row1">
@@ -116,8 +224,9 @@ export const TicTacToe = () => {
                 </div>
             </div>
 
-            <button className="reset" onClick={() => { resetGame() }}>Reset</button>
+            <button className="reset" onClick={resetGame}>Reset</button>
         </div>
     )
 }
+
 export default TicTacToe
